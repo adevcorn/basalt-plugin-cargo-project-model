@@ -5,6 +5,7 @@ use std::mem;
 
 const BASALT_PLUGIN_API_VERSION: u32 = 1;
 const CAP_PROJECT_MODEL: u64 = 1 << 8;
+const CAP_SHADOW_EXCLUDES: u64 = 1 << 25;
 const FILE_BUF_OFFSET: usize = 8 * 1024 * 1024;
 const FILE_BUF_CAP: usize = 256 * 1024;
 
@@ -28,7 +29,7 @@ struct PluginMetaRecord {
 }
 
 static NAME: &[u8] = b"cargo-project-model\0";
-static VERSION: &[u8] = b"0.1.0\0";
+static VERSION: &[u8] = b"0.1.1\0";
 static PROVIDES: &[u8] = b"project-model:cargo\0";
 static REQUIRES: &[u8] = b"\0";
 static FILE_GLOBS: &[u8] = b"Cargo.toml\n**/Cargo.toml\0";
@@ -53,7 +54,7 @@ pub extern "C" fn basalt_plugin_metadata() -> i32 {
     unsafe {
         META.api_version = BASALT_PLUGIN_API_VERSION;
         META._pad = 0;
-        META.hook_flags = CAP_PROJECT_MODEL;
+        META.hook_flags = CAP_PROJECT_MODEL | CAP_SHADOW_EXCLUDES;
         META.name_ptr = NAME.as_ptr() as u32;
         META.version_ptr = VERSION.as_ptr() as u32;
         META.provides_ptr = PROVIDES.as_ptr() as u32;
@@ -71,6 +72,12 @@ pub unsafe extern "C" fn deallocate(ptr: i32, len: i32) {
         return;
     }
     let _ = Vec::from_raw_parts(ptr as *mut u8, len as usize, len as usize);
+}
+
+/// Cargo's `target/` directory is reproducible build output.
+#[no_mangle]
+pub unsafe extern "C" fn basalt_shadow_excludes(_root_ptr: i32, _root_len: i32) -> i64 {
+    pack_output(br#"["**/target/**"]"#.to_vec())
 }
 
 #[no_mangle]
